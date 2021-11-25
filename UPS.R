@@ -125,21 +125,21 @@ write.csv(ddf,"005-data-sites/level-selection.csv",row.names = F)
 # plot histograms for each parameter with classification intervals
 p1 <- ggplot(df,aes(x=prim)) +
   geom_histogram(binwidth=0.04) +
-  geom_vline(xintercept=c(2.58,tprim),col="red") +
+  geom_vline(xintercept=c(2.58,tprim),col="blue") +
   theme_bw() +
   theme(axis.text=element_text(colour="black")) +
   labs(x="mean primary attractiveness [n]",y="amount [n]")
 
 p2 <- ggplot(df,aes(x=prop)) +
   geom_histogram(binwidth=1) +
-  geom_vline(xintercept=c(0.48,tspruc),col="red") +
+  geom_vline(xintercept=c(0.48,tspruc),col="blue") +
   theme_bw() +
   theme(axis.text=element_text(colour="black")) +
   labs(x="spruce proportion [%]",y="amount [n]")
 
 p3 <- ggplot(df,aes(x=nsource)) +
   geom_histogram(binwidth=1.5) +
-  geom_vline(xintercept=tninf,col="red") +
+  geom_vline(xintercept=tninf,col="blue") +
   theme_bw() +
   theme(axis.text=element_text(colour="black")) +
   labs(x="beetle source trees [n]",y="amount [n]")
