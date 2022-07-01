@@ -6,3 +6,4 @@ This repository contains the data sets generated and analyzed for the metamodel 
 - directory data-sites: contains raw and processed data on all grid cells as well as the selected grid cells for simulation with IPS-SPREADS
 - directory data-plots: conatins the results of the 20 year application of the developed metamodel
 - directory kappa: contains the results of applying all metamodel variants for 2017 and 2018
+- directory maps: contains infestation risk maps of the research areas after 20 year simulations
