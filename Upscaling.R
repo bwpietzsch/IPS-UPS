@@ -45,18 +45,15 @@ rm(list=ls())
 # create inf layers from 2020 geodatabase ---------------------------------
 
 # load required libraries
-library("raster")
-library("maptools")
-library("rgdal")
+library("terra")
 library("rosm")
 library("prettymapr")
-library("rgeos")
 
 # set path to data
-fgdb <- "/home/bruno/Nextcloud/Promotion/012-Daten/NLP-Sachsen/GESAMT/daten_2020/daten/bkbefall_aus_dfe.gdb"
+fgdb <- "C:/Users/bruno/ownCloud/Promotion/012-Daten/NLP-Sachsen/GESAMT/daten_2020/daten/bkbefall_aus_dfe.gdb"
 
 # import geodatabase
-fc <- readOGR(dsn=fgdb)
+fc <- vect(fgdb)
 
 # retrieve damage done by ips typographus
 fc <- fc[fc$WS_URSACH3=="BDR",]
@@ -74,7 +71,7 @@ rm(d)
 fc <- fc[fc$Jahr==2019,]
 
 # import baseraster for rasterization
-baseraster <- raster("/home/bruno/Nextcloud/Promotion/012-Daten/NLP-Sachsen/base-raster.tif")
+baseraster <- rast("C:/Users/bruno/ownCloud/Promotion/012-Daten/NLP-Sachsen/base-raster.tif")
 
 # rasterize data
 r19 <- rasterize(fc,baseraster,field=fc$Jahr,fun="first",update=T)
@@ -234,7 +231,7 @@ dev.off()
 # retrieve classification -------------------------------------------------
 
 # set working directory accordingly
-setwd("/home/bruno/Nextcloud/Promotion/024-Upscaling/")
+setwd("C:/Users/bruno/ownCloud/Promotion/024-Upscaling/")
 
 # import data table with information on all sites
 df <- read.csv("005-data-sites/data-all-sites.csv")
@@ -375,11 +372,13 @@ p3 <- ggplot(df,aes(x=nsource)) +
   geom_vline(xintercept=tninf,col="blue") +
   theme_bw() +
   theme(axis.text=element_text(colour="black")) +
-  labs(x="beetle source trees [n]",y="amount [n]")
+  labs(x="infested trees [n]",y="amount [n]")
 
 multiplot(p1,p2,p3,cols=3)
 
-pdf("/home/bruno/Nextcloud/Promotion/010-Paper/003-IBM+ML/manuscript/figures/UPS-histogram-properties-all-sites.pdf",width=8,height=3)
+# pdf("UPS-histogram-properties-all-sites.pdf",width=8,height=3)
+jpeg("C:/Users/bruno/ownCloud/Promotion/010-Paper/003-IBM+ML/UPS-histogram-properties-all-sites.jpeg",
+     width=8,height=3,units="in",res=800)
 multiplot(p1,p2,p3,cols=3)
 dev.off()
 
@@ -1120,7 +1119,7 @@ write.csv(df,"006-kappa/data-all-sites-all-years.csv",row.names = F)
 rm(list=ls())
 
 ##
-# calculate Kappa values
+# calculate macro-averaged F1 scores
 ##
 
 # import real world data 
@@ -1145,16 +1144,19 @@ MMC <- MMC[MMC$ID %in% df$ID,]
 MMN <- MMN[MMN$ID %in% df$ID,]
 MMNC <- MMNC[MMNC$ID %in% df$ID,]
 
+# create empty lists for results
 dl17 <- list()
 dl18 <- list()
 
+# define infestation levels as factors
 for (i in 2:ncol(MM)) {
-  MM[,i] <- as.factor(MM[,i])
-  MMC[,i] <- as.factor(MMC[,i])
-  MMN[,i] <- as.factor(MMN[,i])
-  MMNC[,i] <- as.factor(MMNC[,i])
+  MM[,i] <- factor(MM[,i],levels=c(0,11,36,286))
+  MMC[,i] <- factor(MMC[,i],levels=c(0,11,36,286))
+  MMN[,i] <- factor(MMN[,i],levels=c(0,11,36,286))
+  MMNC[,i] <- factor(MMNC[,i],levels=c(0,11,36,286))
 }
 
+# split data according to years
 dl17[[1]] <- MM[,c(1,seq(2,30,2))]
 dl18[[1]] <- MM[,c(1,seq(3,31,2))]
 
@@ -1167,43 +1169,103 @@ dl18[[3]] <- MMN[,c(1,seq(3,31,2))]
 dl17[[4]] <- MMNC[,c(1,seq(2,30,2))]
 dl18[[4]] <- MMNC[,c(1,seq(3,31,2))]
 
+# remove obsolete data
 rm(MM,MMN,MMC,MMNC)
 
-library("irr")
+# create result data frames
+df17 <- data.frame("scenario"=colnames(dl17[[1]])[2:ncol(dl17[[1]])])
+df18 <- data.frame("scenario"=colnames(dl18[[1]])[2:ncol(dl18[[1]])])
 
-df17 <- data.frame("scenario"=colnames(dl17[[1]])[2:16])
-df18 <- data.frame("scenario"=colnames(dl18[[1]])[2:16])
-
+# create emtpy vector for computation
 a <- c()
+
+# change infestation levels to factor
 df$nsource17 <- as.factor(df$nsource17)
 df$nsource18 <- as.factor(df$nsource18)
 
-for(i in 1:length(dl17)) {
-  for(ii in 1:length(dl17[[i]])) {
-    a[ii] <- kappa2(ratings=cbind(df$nsource17,dl17[[i]][,ii]),weight="squared")$value
+# calculate macro-averaged F1 score for 2017 model predictions
+for (i in 1:length(dl17)) {
+  for (ii in 1:length(dl17[[i]])) {
+    # create confusion matrix
+    cm <- as.matrix(table(Actual = df$nsource17, Predicted = dl17[[i]][,ii]))
+    # number of instances
+    n <- sum(cm) 
+    # number of classes
+    nc <- nrow(cm) 
+    # number of correctly classified instances per class 
+    diag <- diag(cm) 
+    rowsums <- apply(cm, 1, sum) 
+    # number of instances per class
+    colsums <- apply(cm, 2, sum) 
+    # number of predictions per class
+    accuracy <- sum(diag) / n 
+    # overall accuracy
+    precision <- diag / colsums 
+    # remove NAs
+    precision[is.na(precision)] <- 0
+    # overall recall
+    recall <- diag / rowsums 
+    # remove NAs
+    recall[is.na(recall)] <- 0
+    # calculate F1 score
+    f1 <- 2 * precision * recall / (precision + recall) 
+    # remove NAs
+    f1[is.na(f1)]  <- 0 
+    # calculate macro-averaged F1 score
+    macroF1 <- mean(f1)
+    # store score into result vector a
+    a[ii] <- macroF1
+    # save result vector as column in result data frame
     if(ii == length(dl17[[i]])) {
-      df17[,i+1] <- a[2:16]
+      df17[,i+1] <- a[2:length(a)]
     }
-  }
-  if(i == length(dl17)){
-    rm(i,ii)
   }
 }
 
+# rename columns
 colnames(df17) <- c("scenario","MM","MMC","MMN","MMNC")
 
-for(i in 1:length(dl18)) {
-  for(ii in 1:length(dl18[[i]])) {
-    a[ii] <- kappa2(ratings=cbind(df$nsource18,dl18[[i]][,ii]),weight="squared")$value
+
+# calculate macro-averaged F1 score for 2018 model predictions
+for (i in 1:length(dl18)) {
+  for (ii in 1:length(dl18[[i]])) {
+    # create confusion matrix
+    cm <- as.matrix(table(Actual = df$nsource18, Predicted = dl18[[i]][,ii]))
+    # number of instances
+    n <- sum(cm) 
+    # number of classes
+    nc <- nrow(cm) 
+    # number of correctly classified instances per class 
+    diag <- diag(cm) 
+    rowsums <- apply(cm, 1, sum) 
+    # number of instances per class
+    colsums <- apply(cm, 2, sum) 
+    # number of predictions per class
+    accuracy <- sum(diag) / n 
+    # overall accuracy
+    precision <- diag / colsums 
+    # remove NAs
+    precision[is.na(precision)] <- 0
+    # overall recall
+    recall <- diag / rowsums 
+    # remove NAs
+    recall[is.na(recall)] <- 0
+    # calculate F1 score
+    f1 <- 2 * precision * recall / (precision + recall) 
+    # remove NAs
+    f1[is.na(f1)]  <- 0 
+    # calculate macro-averaged F1 score
+    macroF1 <- mean(f1)
+    # store score into result vector a
+    a[ii] <- macroF1
+    # save result vector as column in result data frame
     if(ii == length(dl18[[i]])) {
-      df18[,i+1] <- a[2:16]
+      df18[,i+1] <- a[2:length(a)]
     }
-  }
-  if(i == length(dl18)){
-    rm(i,ii,a)
   }
 }
 
+# rename columns
 colnames(df18) <- c("scenario","MM","MMC","MMN","MMNC")
 
 # create data frame to compute the mean of both years
@@ -1218,28 +1280,31 @@ df0 <- rbind(df17,df18,df00)
 # delete everything else
 rm(df17,df18,dl17,dl18,df)
 
+# create column for years and mean
 df0$year <- c(rep(2017,15),rep(2018,15),rep("mean",15))
 
+# add column containing santiation felling intensities
 df0$management <- c(rep(c(0,0,0,25,25,25,50,50,50,75,75,75,100,100,100),3))
 
+# create column containing beetle generation numbers
 df0$generation <- c(rep(c(1,2,3),15))
 
+# remove obsolete column
 df0 <- df0[,-1]
 
+# change columns to factors
 df0$management <- as.factor(df0$management)
-
 df0$generation <- as.factor(df0$generation)
-
 df0$year <- as.factor(df0$year)
 
+# load required libraries
 library("reshape2")
-
-df0 <- melt(df0)
-
 library("ggplot2")
 
+# transform data frame for plotting with ggplot2
+df0 <- melt(df0)
+
 # rename levels for meta-model versions
-# levels(df0$variable) <- c("Basic Meta-model (MM)","MM + Capacity","MM + Neighbor","MM + Neighbor + Capacity")
 levels(df0$variable) <- c("Basic Meta-model (MM)","MM + Spruce Dieback","MM + Beetle Spread","MM + Spread + Dieback")
 
 # create labels with 2 digits for plotting
@@ -1254,12 +1319,13 @@ ggplot(df0,aes(x=management,y=generation,fill=value)) +
   theme_bw() +
   labs(x="Sanitation felling intensity [%]",
        y="Beetle generations [n]",
-       fill="Cohen's\nKappa") +
+       fill="Macro-averaged \nF1 score") +
   theme(axis.text.x = element_text(colour="black"),
         axis.text.y = element_text(colour="black"),
         legend.position = "top")
 
-ggsave("006-kappa/UPS-Kappa.pdf",width=7,height=8)
+# ggsave("006-kappa/UPS-Kappa.pdf",width=7,height=8)
+ggsave("C:/Users/bruno/ownCloud/Promotion/010-Paper/003-IBM+ML/UPS-Kappa.jpeg",width=7,height=8,dpi=800)
 
 # delete everything
 rm(list=ls())
@@ -1605,20 +1671,24 @@ ggplot(dll,aes(x=value,y=cn,fill=Section)) +
         legend.position = "top",
         axis.text.y = element_text(colour="black"))
 
-ggsave("007-plots/UPS-barplot-scenarios.pdf",width=7,height=9)
+# ggsave("007-plots/UPS-barplot-scenarios.pdf",width=7,height=9)
+ggsave("C:/Users/bruno/ownCloud/Promotion/010-Paper/003-IBM+ML/UPS-barplot-scenarios.jpeg",width=7,height=9,dpi=800)
 
 # remove everything
 rm(list=ls())
 dev.off()
 
-# TODO: Meta-model visualization ------------------------------------------------
+# create output raster with infestation risk ------------------------------------------------
 
 # set working directory accordingly
 setwd("C:/Users/Bruno/ownCloud/Promotion/024-Upscaling/")
 
 # load necessary libraries
 library("terra")
-
+library("rosm")
+library("sp")
+library("prettymapr")
+citation("terra")
 # import empty raster
 r0 <- rast("004-data-plots/empty-raster.tif")
 
@@ -1647,72 +1717,18 @@ b <- names(dl)
 # extract results of 20 year prediction
 dl <- lapply(dl, function(x){x <- x[,20]})
 
-# define colors
-library("RColorBrewer") # load color library
+# copy base raster
+dl2 <- lapply(dl,function(x){x <- r0})
 
-pal <- brewer.pal(n=5,name="Reds") # color blind palette in red
+# assign results to raster
+for (i in 1:length(dl2)) {values(dl2[[i]]) <- dl[[i]]}
 
-# define factor levels for all scenarios
-levs <- c("0","25","50","75","100")
+# assign names
+names(dl2) <- names(dl)
 
-#  Set these as the levels for each column    
-dl <- data.frame(lapply(dl,factor,levels=levs))
-
-# rename column names
-colnames(dl) <- b
-
-# create vector with names of scenarios
-a <- paste(substr(b,start=1,stop=1),"generation",substr(b,start=3,stop=nchar(b)),"felling",sep="-")
-
-# set breaks for colors
-cuts=c(0.5,1.5,2.5,3.5,4.5,5.5) 
-
-i <- 1
-
-# plot all scenarios
-for (i in 1:ncol(dl)) {
-  
-  # create working copy of output raster r0
-  r1 <- r0
-  
-  # transfer values of given scenario to output raster
-  values(r1) <- dl[,i]
-  
-  # project raster to mercator for open street map layer
-  # r1 <- project(r1,"epsg:3857")
-  
-  # plot as pdf file
-  pdf(paste("007-plots/",a[i],".pdf",sep=""),width=15,height=9)
-  
-  # plot without outer margins or plot border
-  prettymap({
-    # plot nlp region as open street map layer
-    osm.plot(matrix(as.vector(ext(r1)),nrow=2,ncol=2,byrow=F),project=T,forcedownload = F,res=800,stoponlargerequest = F,zoomin=-2)
-    
-    # plot risk map
-    plot(r1,breaks=cuts,col=pal,legend=F,alpha=0.5)
-         # maxpixels=1000000000)
-         # add=T)
-    
-    # plot legend of risk map
-    plot(r1,legend.only=T,
-         horizontal=F,
-         breaks=cuts,
-         col = pal,
-         axis.args=list(labels=c("0","25","50","75","100"),
-                        at=c(1:5)),
-         legend.args=list(text="killed trees [%]",font=2),
-         smallplot=c(0.05,0.06,0.1,0.5))
-    
-    # plot black nlp border
-    plot(nlp,add=T,border="black")
-  },
-  
-  # plot scale and north arrow
-  drawbox = T, drawarrow = T
-  )
-  dev.off()
-}
+# export output rasters
+for (i in 1:length(dl2)) {writeRaster(dl2[[i]],paste("008-output-raster/",names(dl2)[i],".tif",sep=""))}
 
 # delete everything
 rm(list=ls())
+dev.off()
