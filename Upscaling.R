@@ -132,18 +132,14 @@ rm(list=ls())
 # gather information on all sites ------------------------------------------------------------
 
 # load required libraries
-library("raster")
-library("maptools")
-library("rgdal")
-library("rgeos")
-library("prettymapr")
+library("terra")
 
 # set working directory accordingly
-setwd("/home/bruno/Nextcloud/Promotion/024-Upscaling/")
+setwd("C:/Users/bruno/ownCloud/Promotion/024-Upscaling")
 
 # load needed data
-PASpoly <- raster("002-projected-tiffs/PASpoly.tif")
-dinf <- raster("002-projected-tiffs/infestations.tif")
+PASpoly <- rast("002-projected-tiffs/PASpoly.tif")
+dinf <- rast("002-projected-tiffs/infestations.tif")
 
 # set cells with infestation to correct value for IPS-SPREADS
 dinf[dinf==2015] <- 1
@@ -162,37 +158,11 @@ r0 <- aggregate(PASpoly,fact=af)
 # remove all values from raster
 values(r0) <- 0
 
-
-library("rosm")
-
-# project data to mercator for openstreetmap
-r1 <- projectRaster(r0,crs=CRS("+init=epsg:3857"))
-
-pdf("007-plots/UPS-overview-sites.pdf",width=15,height=9)
-
-# plot without outer margins or plot border
-prettymap({
-  # plot nlp region as open street map layer
-  osm.plot(r1,project=T,forcedownload = F,res=800,stoponlargerequest = F,zoomin=-2)
-  
-  # plot squares
-  plot(rasterToPolygons(r1), add=TRUE, border='black', lwd=0.5) 
-  
-},
-
-# plot scale and north arrow
-drawbox = T, drawarrow = T
-)
-dev.off()
-
-# plot 1 x 1 km cells
-plot(rasterToPolygons(r0), add=TRUE, border='black', lwd=1) 
-
 # set projection accordingly
-proj4string(r0) <- proj4string(PASpoly)
+crs(r0) <- crs(PASpoly)
 
 # export empty output raster for inserting results later on
-writeRaster(r0,"004-data-plots/empty-raster",format="GTiff",overwrite=T,proj=T)
+writeRaster(r0,"004-data-plots/empty-raster.tif",overwrite=T)
 
 # sum of infested trees for each cell
 dsource <- aggregate(dinf,fact=af,fun=sum)
@@ -700,112 +670,80 @@ ddf <- ddf[,c(10,1:9)]
 # rename columns
 colnames(ddf) <- c("generations","felling","ID","nsource1","prima1","prop1","nsource2","prima2","prop2","dead")
 
-# split data frame
-dl <- split(ddf,f=list(ddf$generations,ddf$felling,ddf$ID))
-
-# create empty data frame
-df <- ddf[1,]
-
-# calculate variance of outputs for each site and scenario to find cases 
-# with more than one destination
-for (i in 1:length(dl)) {
-  df[i,] <- dl[[i]][1,]
-  df[i,7] <- var(dl[[i]][,7])
-  df[i,8] <- var(dl[[i]][,8])
-  df[i,9] <- var(dl[[i]][,9])
-}
-
-# delete obsolete data
-rm(dl,i)
-
-# calculate sum of variance to check all outputs simultaneously
-df$sum <- df$nsource2 + df$prima2 + df$prop2
-
-# extract combinations with variance above 0 (more than one destination)
-df <- df[df$sum!=0,]
-
-# extract combinations with more than one possible destination for site and scenario
-for (i in 1:nrow(df)) {
-  ifelse(i==1,
-         ddf2 <- ddf[ddf[,1]==df[i,1] & ddf[,2]==df[i,2] & ddf[,3]==df[i,3],],
-         ddf2 <- rbind(ddf2,ddf[ddf[,1]==df[i,1] & ddf[,2]==df[i,2] & ddf[,3]==df[i,3],]))
-}
-
-# remove obsolete data
-rm(i)
+# remove obsolete 1 generation
+ddf <- ddf[ddf$generations!=1,]
 
 # split data frame
-dl <- split(ddf2[,c(1:9)],f=list(ddf2$generations,ddf2$felling,ddf2$ID),drop=T)
+dl <- split(ddf[,1:9],f=list(ddf$generations,ddf$felling,ddf$ID))
 
-# check if there are more than two possible destinations for each site and scenario
-lapply(dl, summary)
+# calculate mean dead trees per combinaton
+ddf0 <- aggregate(dead~generations+felling+ID+nsource1+prima1+prop1+nsource2+prima2+prop2,ddf,mean)
 
 # extract frequencies of the two possible destinations per site and scenario
 for (i in 1:length(dl)) {
-  ifelse(i==1,df2 <- as.data.frame(table(dl[[i]])),df2 <- rbind(df2,as.data.frame(table(dl[[i]]))))
+  ifelse(i==1,
+         df2 <- as.data.frame(table(dl[[i]])),
+         df2 <- rbind(df2,as.data.frame(table(dl[[i]]))))
 }
 
-# split data frame according to alternative destinations
-df2A <- df2[seq(1,34,2),]
-df2B <- df2[seq(2,34,2),]
+# remove entries without ocurrences
+df2 <- df2[df2$Freq!=0,]
 
-# insert B version of nsource2 and prima2 based on alternative destinations
-df2A$nsource2B <- df2B$nsource2
-df2A$prima2B <- df2B$prima2
+# add mean dead trees to combinations
+df2 <- merge(df2,ddf0)
 
-# delete obsolete data
-rm(df2,df2B,dl,i,df)
+# split data frame
+dl2 <- split(df2,f=list(df2$generations,df2$felling,df2$ID))
+
+# create empty dataframe for results
+df0 <- data.frame(NULL)
+
+for (i in 1:length(dl2)) {
+  
+  # store number of rows as variable b
+  b <- nrow(dl2[[i]])
+  
+  # check if 1 destination occurred
+  if(b==1){ 
+    dfz <- dl2[[i]] # create working copy
+    dfz <- cbind(dfz,dfz[,7:11],dfz[,7:11]) # copy columns to get 3 artificial destinations
+    dfz[1,c(15,20)] <- 0 # set probability of 2nd and 3rd destination to 0
+  }
+  
+  # check if 2 destinations occurred
+  if(b==2){ 
+    dfz <- dl2[[i]] # create working copy
+    dfz <- cbind(dfz[1,],dfz[2,7:11],dfz[2,7:11]) # copy columns to get 3 destinations
+    dfz[1,20] <- 0 # set probability of 3rd artificial destination to 0
+  }
+  
+  # check if 3 destinations occurred
+  if(b==3){ 
+    dfz <- dl2[[i]] # create working copy
+    dfz <- cbind(dfz[1,],dfz[2,7:11],dfz[3,7:11]) # copy columns to get 3 destinations
+  }
+  
+  # check if its the first loop
+  ifelse(i==1,
+         df0 <- dfz, # store working data frame as results data frame
+         df0 <- rbind(df0,dfz)) # attach working data fram to results data frame
+}
+
+# rm obsolete data
+rm(dfz,dl2,i,b,dl,df2,ddf,ddf0)
+
+# change colnames accordingly
+colnames(df0)[7:21] <- c("nsource2A","prima2A","prop2A","FreqA","deadA",
+                         "nsource2B","prima2B","prop2B","FreqB","deadB",
+                         "nsource2C","prima2C","prop2C","FreqC","deadC")
 
 # convert frequency to probability
-df2A$Freq <- df2A$Freq / 10
+df0$FreqA <- df0$FreqA / 10
+df0$FreqB <- df0$FreqB / 10
+df0$FreqC <- df0$FreqC / 10
 
-# rename column
-colnames(df2A)[10] <- "probability"
-
-# remove rows with alternative destinations from data
-ddf <- ddf[-as.numeric(row.names(ddf2)),]
-
-# calculate means
-df <- aggregate(cbind(nsource1,prima1,prop1,nsource2,prima2,prop2,dead)~generations+felling+ID,ddf,mean)
-
-df2 <- aggregate(dead~generations+felling+ID+nsource1+prima1+prop1+nsource2+prima2+prop2,ddf2,mean)
-
-# remove obsolete data
-rm(ddf,ddf2)
-
-# create alternative output columns
-df$nsource2B <- 0
-df$prima2B <- 0
-df$deadB <- 0
-df2A$dead <- 0
-df2A$deadB <- 0
-
-# fill df2A with mean deads from df2
-for (i in 1:nrow(df2A)) {
-  for (ii in 1:nrow(df2)) {
-    if(df2A[i,1]==df2[ii,1]&&df2A[i,2]==df2[ii,2]&&df2A[i,3]==df2[ii,3]&&df2A[i,7]==df2[ii,7]&&df2A[i,8]==df2[ii,8]) df2A[i,13] <- df2[ii,10]
-    if(df2A[i,1]==df2[ii,1]&&df2A[i,2]==df2[ii,2]&&df2A[i,3]==df2[ii,3]&&df2A[i,11]==df2[ii,7]&&df2A[i,8]==df2[ii,8]) df2A[i,14] <- df2[ii,10]
-    if(df2A[i,1]==df2[ii,1]&&df2A[i,2]==df2[ii,2]&&df2A[i,3]==df2[ii,3]&&df2A[i,7]==df2[ii,7]&&df2A[i,12]==df2[ii,8]) df2A[i,14] <- df2[ii,10]
-  }
-}
-
-# delete obsolete
-rm(df2,i,ii)
-
-# insert probability for alternative destination in data frame
-df$probability <- 1
-
-# combine data frames
-df <- rbind(df,df2A)
-
-# remove obsolete
-rm(df2A)
-
-# shorten column names
-colnames(df)[14] <- "proba"
-
-# calculate probability for alternate destination to occur
-df$proba <- 1 - df$proba
+# rename data frame
+df <- df0
 
 # add missing sites (sites without sources)
 df0 <- read.csv("005-data-sites/selected-sites.csv")
@@ -816,35 +754,53 @@ df0 <- df0[df0$nsource==0,]
 # add missing columns to combine both data frames
 df0$generations = 0
 df0$felling = 0
-df0$prop2 = df0$prop
-df0$prima2 = df0$prim
-df0$nsource2 = df0$nsource
-df0$dead = 0
-df0$proba = 0
-df0$deadB = 0
+df0$prop2A = df0$prop
+df0$prima2A = df0$prim
+df0$nsource2A = df0$nsource
+df0$deadA = 0
+df0$FreqA = 1
 df0$nsource2B = 0
 df0$prima2B = 0
+df0$prop2B = 0
+df0$FreqB = 0
+df0$deadB = 0
+df0$nsource2C = 0
+df0$prima2C = 0
+df0$prop2C = 0
+df0$FreqC = 0
+df0$deadC = 0
 
 # rename columns
 colnames(df0)[1:3] <- c("prop1","prima1","nsource1")
 
 # multiply rows accordingly
-df0 <- rbind(df0,df0,df0)
+df0 <- rbind(df0,df0)
 
 # set levels for generation accordingly
-df0$generations <- c(rep(1,9),rep(2,9),rep(3,9))
+df0$generations <- c(rep(2,9),rep(3,9))
 
 # multiply rows accordingly
-df0 <- rbind(df0,df0,df0,df0,df0)
+df0 <- rbind(df0,df0,df0,df0,df0,df0,df0,df0,df0,df0,df0)
 
 # set levels for felling accordingly
-df0$felling <- c(rep(0,27),rep(25,27),rep(50,27),rep(75,27),rep(100,27))
+df0$felling <- c(rep(0,18),rep(10,18),rep(20,18),rep(30,18),rep(40,18),rep(50,18),
+                 rep(60,18),rep(70,18),rep(80,18),rep(90,18),rep(100,18))
 
-# combine both data frames
+# remove factoring
+for (i in 1:length(df)) {
+  if(is.factor(df[,i])){
+    df[,i] <- as.numeric(levels(df[,i]))[df[,i]]
+  }
+}
+
+for (i in 1:length(df0)) {
+  if(is.factor(df0[,i])){
+    df0[,i] <- as.numeric(levels(df0[,i]))[df0[,i]]
+  }
+}
+
+# combine data frames
 df <- rbind(df,df0)
-
-# delete obsolete data
-rm(df0)
 
 # export data frame
 write.csv(df,"005-data-sites/results-IPS-SPREADS.csv",row.names = F)
@@ -919,10 +875,10 @@ df0 <- data.frame(df$ID)
 a <- 3
 
 # set N to TRUE if neighbor rule is to be applied
-N <- TRUE
+N <- FALSE
 
 # set C to TRUE if capacity rule is to be applied
-C <- TRUE
+C <- FALSE
 
 for (z in 1:length(dl)) {
   for (J in 1:a) {
@@ -951,15 +907,34 @@ for (z in 1:length(dl)) {
           ap <- i - 132 # above patch
           bp <- i + 132 # below patch
           
+          lp2 <- i - 133 # left patch
+          rp2 <- i + 133 # right patch
+          ap2 <- i - 131 # above patch
+          bp2 <- i + 131 # below patch
+          
           # check if there are neighbor cells
           ifelse(any(c(1:nrow(dl1[[J]])) == lp), lp <- lp, lp <- 1)
           ifelse(any(c(1:nrow(dl1[[J]])) == rp), rp <- rp, rp <- 1)
           ifelse(any(c(1:nrow(dl1[[J]])) == ap), ap <- ap, ap <- 1)
           ifelse(any(c(1:nrow(dl1[[J]])) == bp), bp <- bp, bp <- 1)
           
+          ifelse(any(c(1:nrow(dl1[[J]])) == lp2), lp2 <- lp2, lp2 <- 1)
+          ifelse(any(c(1:nrow(dl1[[J]])) == rp2), rp2 <- rp2, rp2 <- 1)
+          ifelse(any(c(1:nrow(dl1[[J]])) == ap2), ap2 <- ap2, ap2 <- 1)
+          ifelse(any(c(1:nrow(dl1[[J]])) == bp2), bp2 <- bp2, bp2 <- 1)
+          
           # check if cell lies on left or right edge of world
           if((i-1)%%132 == 0){lp <- 1}
           if(i%%132 == 0){rp <- 1}
+          
+          if((i-1)%%132 == 0){
+            lp2 <- 1
+            ap2 <- 1
+            }
+          if(i%%132 == 0){
+            rp2 <- 1
+            bp2 <- 1
+            }
           
           # create  a variable to count neighbors with highest
           # infestation level
@@ -971,20 +946,19 @@ for (z in 1:length(dl)) {
           if(dl1[[J]]$nsource[ap] == 286){counter<-counter+1}
           if(dl1[[J]]$nsource[bp] == 286){counter<-counter+1}
           
+          if(dl1[[J]]$nsource[lp2] == 286){counter<-counter+1}
+          if(dl1[[J]]$nsource[rp2] == 286){counter<-counter+1}
+          if(dl1[[J]]$nsource[ap2] == 286){counter<-counter+1}
+          if(dl1[[J]]$nsource[bp2] == 286){counter<-counter+1}
+          
           # increase infestation level if there is at least one neighbor
-          if(counter >= 1 && (z+2)%%3 == 0) { # 1 level if 1 generation
-            if(b[i]==36){b[i] <- 286}
-            if(b[i]==11){b[i] <- 36}
-            if(b[i]==0){b[i] <- 11}
-          }
-
-          if(counter >= 1 && (z+1)%%3 == 0) { # 2 levels if 2 generations
+          if(counter >= 1 && dl[[z]][1,1] == 2) { # 2 levels if 2 generations
             if(b[i]==36){b[i] <- 286}
             if(b[i]==11){b[i] <- 286}
             if(b[i]==0){b[i] <- 36}
           }
 
-          if(counter >= 1 && z%%3 == 0) { # 3 levels if 3 generations
+          if(counter >= 1 && dl[[z]][1,1] == 3) { # 3 levels if 3 generations
             if(b[i]==36){b[i] <- 286}
             if(b[i]==11){b[i] <- 286}
             if(b[i]==0){b[i] <- 286}
@@ -1008,28 +982,45 @@ for (z in 1:length(dl)) {
     for (i in 1:nrow(dl1[[J]])) {
       for (ii in 1:nrow(dl[[z]])) {
         if(dl[[z]]$prop1[ii] == dl1[[J]]$prop[i] && dl[[z]]$prima1[ii] == dl1[[J]]$prima[i] && dl[[z]]$nsource1[ii] == dl1[[J]]$nsource[i]) {
-          
+
+          # random number to decide which destination A is reached
           ff <- runif(1,0,1)
-          # random number to decide if alternative destination is reached
-          if(ff >= dl[[z]]$proba[ii]) {
-            dl1[[J]]$prop[i] <- dl[[z]]$prop2[ii]
-            dl1[[J]]$prima[i] <- dl[[z]]$prima2[ii]
-            dl1[[J]]$nsource[i] <- dl[[z]]$nsource2[ii]
+          
+          # check if destination A is chosen
+          if(ff <= dl[[z]]$FreqA[ii]) {
+            dl1[[J]]$prop[i] <- dl[[z]]$prop2A[ii]
+            dl1[[J]]$prima[i] <- dl[[z]]$prima2A[ii]
+            dl1[[J]]$nsource[i] <- dl[[z]]$nsource2A[ii]
           } else {
-            dl1[[J]]$prop[i] <- dl[[z]]$prop2[ii]
-            dl1[[J]]$prima[i] <- dl[[z]]$prima2B[ii]
-            dl1[[J]]$nsource[i] <- dl[[z]]$nsource2B[ii]
+            # check if destination B is chosen
+            if(ff <= dl[[z]]$FreqA[ii] + dl[[z]]$FreqB[ii]){
+              dl1[[J]]$prop[i] <- dl[[z]]$prop2B[ii]
+              dl1[[J]]$prima[i] <- dl[[z]]$prima2B[ii]
+              dl1[[J]]$nsource[i] <- dl[[z]]$nsource2B[ii]
+            } else {
+              # destination C is chosen
+              dl1[[J]]$prop[i] <- dl[[z]]$prop2C[ii]
+              dl1[[J]]$prima[i] <- dl[[z]]$prima2C[ii]
+              dl1[[J]]$nsource[i] <- dl[[z]]$nsource2C[ii]
+            }
           }
           
           # +++++++++++++++++++++++++++++++++++++++++++++++++++ #
           # CAPACITY / GROWTH / DEATH
           # +++++++++++++++++++++++++++++++++++++++++++++++++++ #
+          # update living spruce amount on each cell in dependence of chosen destination
           if(C==TRUE) {
-            # update living spruce amount on each cell
-            if(ff >= dl[[z]]$proba[ii]) {
-              dl1[[J]]$spruces[i] <- dl1[[J]]$spruces[i] - dl[[z]]$dead[ii]
+            # check if destination A is reached
+            if(ff <= dl[[z]]$FreqA[ii]) {
+              dl1[[J]]$spruces[i] <- dl1[[J]]$spruces[i] - dl[[z]]$deadA[ii]
             } else {
-              dl1[[J]]$spruces[i] <- dl1[[J]]$spruces[i] - dl[[z]]$deadB[ii]
+              # check if destination B is reached
+              if(ff <= dl[[z]]$FreqA[ii] + dl[[z]]$FreqB[ii]){
+                dl1[[J]]$spruces[i] <- dl1[[J]]$spruces[i] - dl[[z]]$deadB[ii]
+              } else {
+                # destination C is reached
+                dl1[[J]]$spruces[i] <- dl1[[J]]$spruces[i] - dl[[z]]$deadC[ii]
+              }
             }
               # check if all spruces are dead
               if(dl1[[J]]$spruces[i] <= 0){
@@ -1157,17 +1148,17 @@ for (i in 2:ncol(MM)) {
 }
 
 # split data according to years
-dl17[[1]] <- MM[,c(1,seq(2,30,2))]
-dl18[[1]] <- MM[,c(1,seq(3,31,2))]
+dl17[[1]] <- MM[,c(1,seq(2,45,2))]
+dl18[[1]] <- MM[,c(1,seq(3,45,2))]
 
-dl17[[2]] <- MMC[,c(1,seq(2,30,2))]
-dl18[[2]] <- MMC[,c(1,seq(3,31,2))]
+dl17[[2]] <- MMC[,c(1,seq(2,45,2))]
+dl18[[2]] <- MMC[,c(1,seq(3,45,2))]
 
-dl17[[3]] <- MMN[,c(1,seq(2,30,2))]
-dl18[[3]] <- MMN[,c(1,seq(3,31,2))]
+dl17[[3]] <- MMN[,c(1,seq(2,45,2))]
+dl18[[3]] <- MMN[,c(1,seq(3,45,2))]
 
-dl17[[4]] <- MMNC[,c(1,seq(2,30,2))]
-dl18[[4]] <- MMNC[,c(1,seq(3,31,2))]
+dl17[[4]] <- MMNC[,c(1,seq(2,45,2))]
+dl18[[4]] <- MMNC[,c(1,seq(3,45,2))]
 
 # remove obsolete data
 rm(MM,MMN,MMC,MMNC)
@@ -1281,13 +1272,13 @@ df0 <- rbind(df17,df18,df00)
 rm(df17,df18,dl17,dl18,df)
 
 # create column for years and mean
-df0$year <- c(rep(2017,15),rep(2018,15),rep("mean",15))
+df0$year <- c(rep(2017,22),rep(2018,22),rep("mean",22))
 
 # add column containing santiation felling intensities
-df0$management <- c(rep(c(0,0,0,25,25,25,50,50,50,75,75,75,100,100,100),3))
+df0$management <- c(rep(c(0,0,10,10,20,20,30,30,40,40,50,50,60,60,70,70,80,80,90,90,100,100),3))
 
 # create column containing beetle generation numbers
-df0$generation <- c(rep(c(1,2,3),15))
+df0$generation <- c(rep(c(2,3),33))
 
 # remove obsolete column
 df0 <- df0[,-1]
@@ -1311,21 +1302,21 @@ levels(df0$variable) <- c("Basic Meta-model (MM)","MM + Spruce Dieback","MM + Be
 df0$value2 <- sprintf("%.2f",round(df0$value,2))
 
 # plot results
-ggplot(df0,aes(x=management,y=generation,fill=value)) +
+ggplot(df0,aes(y=management,x=generation,fill=value)) +
   geom_tile(col="black") +
   geom_text(aes(label = value2),na.rm=T) +
   scale_fill_gradient(low = "#98C5E3", high = "#3A7EAB") +
   facet_grid(variable~year) +
   theme_bw() +
-  labs(x="Sanitation felling intensity [%]",
-       y="Beetle generations [n]",
+  labs(y="Sanitation felling intensity [%]",
+       x="Beetle generations [n]",
        fill="Macro-averaged \nF1 score") +
   theme(axis.text.x = element_text(colour="black"),
         axis.text.y = element_text(colour="black"),
         legend.position = "top")
 
 # ggsave("006-kappa/UPS-Kappa.pdf",width=7,height=8)
-ggsave("C:/Users/bruno/ownCloud/Promotion/010-Paper/003-IBM+ML/UPS-Kappa.jpeg",width=7,height=8,dpi=800)
+ggsave("C:/Users/bruno/ownCloud/Promotion/010-Paper/003-IBM+ML/UPS-F1score.jpeg",width=16,height=19,units="cm",dpi=800)
 
 # delete everything
 rm(list=ls())
@@ -1394,15 +1385,34 @@ for (z in 1:length(dl)) {
           ap <- i - 132 # above patch
           bp <- i + 132 # below patch
           
+          lp2 <- i - 133 # left patch
+          rp2 <- i + 133 # right patch
+          ap2 <- i - 131 # above patch
+          bp2 <- i + 131 # below patch
+          
           # check if there are neighbor cells
           ifelse(any(c(1:nrow(dl1[[J]])) == lp), lp <- lp, lp <- 1)
           ifelse(any(c(1:nrow(dl1[[J]])) == rp), rp <- rp, rp <- 1)
           ifelse(any(c(1:nrow(dl1[[J]])) == ap), ap <- ap, ap <- 1)
           ifelse(any(c(1:nrow(dl1[[J]])) == bp), bp <- bp, bp <- 1)
           
+          ifelse(any(c(1:nrow(dl1[[J]])) == lp2), lp2 <- lp2, lp2 <- 1)
+          ifelse(any(c(1:nrow(dl1[[J]])) == rp2), rp2 <- rp2, rp2 <- 1)
+          ifelse(any(c(1:nrow(dl1[[J]])) == ap2), ap2 <- ap2, ap2 <- 1)
+          ifelse(any(c(1:nrow(dl1[[J]])) == bp2), bp2 <- bp2, bp2 <- 1)
+          
           # check if cell lies on left or right edge of world
           if((i-1)%%132 == 0){lp <- 1}
           if(i%%132 == 0){rp <- 1}
+          
+          if((i-1)%%132 == 0){
+            lp2 <- 1
+            ap2 <- 1
+          }
+          if(i%%132 == 0){
+            rp2 <- 1
+            bp2 <- 1
+          }
           
           # create  a variable to count neighbors with highest
           # infestation level
@@ -1414,20 +1424,19 @@ for (z in 1:length(dl)) {
           if(dl1[[J]]$nsource[ap] == 286){counter<-counter+1}
           if(dl1[[J]]$nsource[bp] == 286){counter<-counter+1}
           
-          # increase infestation level if there is at least one neighbor
-          if(counter >= 1 && (z+2)%%3 == 0) { # 1 level if 1 generation
-            if(b[i]==36){b[i] <- 286}
-            if(b[i]==11){b[i] <- 36}
-            if(b[i]==0){b[i] <- 11}
-          }
+          if(dl1[[J]]$nsource[lp2] == 286){counter<-counter+1}
+          if(dl1[[J]]$nsource[rp2] == 286){counter<-counter+1}
+          if(dl1[[J]]$nsource[ap2] == 286){counter<-counter+1}
+          if(dl1[[J]]$nsource[bp2] == 286){counter<-counter+1}
           
-          if(counter >= 1 && (z+1)%%3 == 0) { # 2 levels if 2 generations
+          # increase infestation level if there is at least one neighbor
+          if(counter >= 1 && dl[[z]][1,1] == 2) { # 2 levels if 2 generations
             if(b[i]==36){b[i] <- 286}
             if(b[i]==11){b[i] <- 286}
             if(b[i]==0){b[i] <- 36}
           }
-          
-          if(counter >= 1 && z%%3 == 0) { # 3 levels if 3 generations
+
+          if(counter >= 1 && dl[[z]][1,1] == 3) { # 3 levels if 3 generations
             if(b[i]==36){b[i] <- 286}
             if(b[i]==11){b[i] <- 286}
             if(b[i]==0){b[i] <- 286}
@@ -1451,17 +1460,45 @@ for (z in 1:length(dl)) {
       for (ii in 1:nrow(dl[[z]])) {
         if(dl[[z]]$prop1[ii] == dl1[[J]]$prop[i] && dl[[z]]$prima1[ii] == dl1[[J]]$prima[i] && dl[[z]]$nsource1[ii] == dl1[[J]]$nsource[i]) {
           
-          dl1[[J]]$prop[i] <- dl[[z]]$prop2[ii]
-          dl1[[J]]$prima[i] <- dl[[z]]$prima2[ii]
-          dl1[[J]]$nsource[i] <- dl[[z]]$nsource2[ii]
+          # random number to decide which destination A is reached
+          ff <- runif(1,0,1)
+          
+          # check if destination A is chosen
+          if(ff <= dl[[z]]$FreqA[ii]) {
+            dl1[[J]]$prop[i] <- dl[[z]]$prop2A[ii]
+            dl1[[J]]$prima[i] <- dl[[z]]$prima2A[ii]
+            dl1[[J]]$nsource[i] <- dl[[z]]$nsource2A[ii]
+          } else {
+            # check if destination B is chosen
+            if(ff <= dl[[z]]$FreqA[ii] + dl[[z]]$FreqB[ii]){
+              dl1[[J]]$prop[i] <- dl[[z]]$prop2B[ii]
+              dl1[[J]]$prima[i] <- dl[[z]]$prima2B[ii]
+              dl1[[J]]$nsource[i] <- dl[[z]]$nsource2B[ii]
+            } else {
+              # destination C is chosen
+              dl1[[J]]$prop[i] <- dl[[z]]$prop2C[ii]
+              dl1[[J]]$prima[i] <- dl[[z]]$prima2C[ii]
+              dl1[[J]]$nsource[i] <- dl[[z]]$nsource2C[ii]
+            }
+          }
           
           # +++++++++++++++++++++++++++++++++++++++++++++++++++ #
           # CAPACITY / GROWTH / DEATH
           # +++++++++++++++++++++++++++++++++++++++++++++++++++ #
+          # update living spruce amount on each cell in dependence of chosen destination
           if(C==TRUE) {
-            # update living spruce amount on each cell
-            dl1[[J]]$spruces[i] <- dl1[[J]]$spruces[i] - dl[[z]]$dead[ii]
-            
+            # check if destination A is reached
+            if(ff <= dl[[z]]$FreqA[ii]) {
+              dl1[[J]]$spruces[i] <- dl1[[J]]$spruces[i] - dl[[z]]$deadA[ii]
+            } else {
+              # check if destination B is reached
+              if(ff <= dl[[z]]$FreqA[ii] + dl[[z]]$FreqB[ii]){
+                dl1[[J]]$spruces[i] <- dl1[[J]]$spruces[i] - dl[[z]]$deadB[ii]
+              } else {
+                # destination C is reached
+                dl1[[J]]$spruces[i] <- dl1[[J]]$spruces[i] - dl[[z]]$deadC[ii]
+              }
+            }
             # check if all spruces are dead
             if(dl1[[J]]$spruces[i] <= 0){
               dl1[[J]][i,c(2:4)] <- 500
@@ -1508,7 +1545,6 @@ rm(list=ls())
 # analyze 20 year prediction --------------------------------------------------
 
 # set working directory accordingly
-# setwd("C:/Users/Bruno/ownCloud/Promotion/024-Upscaling/")
 setwd("C:/Users/Bruno/ownCloud/Promotion/024-Upscaling/")
 
 # load necessary libraries
@@ -1537,7 +1573,7 @@ rm(temp) # delete names
 setwd("C:/Users/Bruno/ownCloud/Promotion/024-Upscaling/")
 
 # mark areas outside the national park
-tt <- mask(r0,nlp)
+tt <- mask(r0,nlp,touches=FALSE)
 
 # create data frame with all area IDs and NAs values for ADJ areas
 df <- as.data.frame(cbind("ID"=c(1:ncell(r0)),"values"=values(tt)))
@@ -1605,27 +1641,30 @@ dl <- rbind(dladj,dlnlp)
 dl$gen <- dl$variable
 
 # set factor levels accordingly
-levels(dl$gen) <- c(rep("1",5),rep("2",5),rep("3",5))
+levels(dl$gen) <- c(rep("2",11),rep("3",11))
 
 # rename levels for plotting
-levels(dl$gen) <- c("1 generation","2 generations","3 generations")
+levels(dl$gen) <- c("2 generations","3 generations")
 
 # create a column for the sanitation felling intensity
 dl$felling <- dl$variable
 
 # set factor levels accordingly
-levels(dl$felling) <- c(rep(c("0","100","25","50","75"),3))
+levels(dl$felling) <- c(rep(c("0","10","100","20","30","40","50","60","70","80","90"),2))
 
 #  reorder factor levels for plotting
-dl$felling <- factor(dl$felling, levels=c("0","25","50","75","100"))
+dl$felling <- factor(dl$felling, levels=paste(seq(0,100,10)))
 
 # rename levels for plotting
-levels(dl$felling) <- c("0 % sanitation felling","25 % sanitation felling",
-                        "50 % sanitation felling","75 % sanitation felling",
-                        "100 % sanitation felling")
+# levels(dl$felling) <- c("0 % sanitation felling","10 % sanitation felling",
+#                         "20 % sanitation felling","30 % sanitation felling",
+#                         "40 % sanitation felling","50 % sanitation felling",
+#                         "60 % sanitation felling","70 % sanitation felling",
+#                         "80 % sanitation felling","90 % sanitation felling",
+#                         "100 % sanitation felling")
 
 # transform results into factor for plotting
-dl$value <- factor(dl$value,levels=c("0","25","50","75","100"))
+dl$value <- factor(dl$value,levels=paste(seq(0,100,25)))
 
 # remove NAs
 dl <- dl[!is.na(dl$value),]
@@ -1659,20 +1698,37 @@ pal <- brewer.pal(2,"Dark2")[-1]
 # plot results
 library("ggplot2")
 
+# create data frame containing all possible combinations of factor levels
+dat2 <- with(dll, expand.grid(value=levels(dll$value),
+                              Section=levels(dll$Section),
+                              gen=levels(dll$gen),
+                              felling=levels(dll$felling)))
+
+# combin this data frame with the actual data frame
+dll <- merge(dll, dat2, all.y = TRUE)
+
+# giv all missing combinations of factor levels a value of 0 for plotting
+dll$cn[is.na(dll$cn)] <- 0
+
+# plot the results
 ggplot(dll,aes(x=value,y=cn,fill=Section)) +
   geom_col(position = position_dodge2(preserve = "single")) +
   facet_grid(felling~gen) +
   scale_fill_manual(values=pal) +
-  labs(y="Proportion [%] from all sites of each section") +
-  scale_x_discrete(name ="Spruces killed [%] on each site",
-                   breaks=c(0,25,50,75,100)) +
+  labs(y="Proportion [%] from all grid cells of each section") +
+  scale_x_discrete(name ="Spruces killed [%] on each grid cell",
+                   breaks=seq(0,100,10)) +
+  scale_y_continuous(sec.axis = sec_axis(~.,name="Sanitation felling intensity [%]")) +
   theme_bw() +
   theme(axis.text.x = element_text(colour="black"),
+        axis.ticks.y.right = element_blank(),
+        axis.text.y.right = element_blank(),
         legend.position = "top",
         axis.text.y = element_text(colour="black"))
 
 # ggsave("007-plots/UPS-barplot-scenarios.pdf",width=7,height=9)
-ggsave("C:/Users/bruno/ownCloud/Promotion/010-Paper/003-IBM+ML/UPS-barplot-scenarios.jpeg",width=7,height=9,dpi=800)
+ggsave("C:/Users/bruno/ownCloud/Promotion/010-Paper/003-IBM+ML/UPS-barplot-scenarios.jpeg",
+       width=16,height=20.5,units="cm",dpi=800)
 
 # remove everything
 rm(list=ls())
@@ -1685,10 +1741,7 @@ setwd("C:/Users/Bruno/ownCloud/Promotion/024-Upscaling/")
 
 # load necessary libraries
 library("terra")
-library("rosm")
-library("sp")
-library("prettymapr")
-citation("terra")
+
 # import empty raster
 r0 <- rast("004-data-plots/empty-raster.tif")
 
@@ -1727,7 +1780,7 @@ for (i in 1:length(dl2)) {values(dl2[[i]]) <- dl[[i]]}
 names(dl2) <- names(dl)
 
 # export output rasters
-for (i in 1:length(dl2)) {writeRaster(dl2[[i]],paste("008-output-raster/",names(dl2)[i],".tif",sep=""))}
+for (i in 1:length(dl2)) {writeRaster(dl2[[i]],paste("008-output-raster/",names(dl2)[i],".tif",sep=""),overwrite=T)}
 
 # delete everything
 rm(list=ls())
