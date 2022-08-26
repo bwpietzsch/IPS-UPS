@@ -1289,7 +1289,7 @@ INPUTBOX
 490
 319
 path-to-input
-input/2698/
+input/5368/
 1
 0
 String
@@ -1578,7 +1578,7 @@ sanitation-felling
 sanitation-felling
 0
 100
-50.0
+20.0
 1
 1
 %
@@ -1917,7 +1917,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.0.4
+NetLogo 6.2.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
@@ -1935,153 +1935,7 @@ NetLogo 6.0.4
     <metric>ncut1</metric>
     <metric>ncut2</metric>
     <metric>ncut3</metric>
-    <enumeratedValueSet variable="sanitation-felling">
-      <value value="0"/>
-      <value value="25"/>
-      <value value="50"/>
-      <value value="75"/>
-      <value value="100"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="path-to-input">
-      <value value="&quot;input/1614/&quot;"/>
-      <value value="&quot;input/1632/&quot;"/>
-      <value value="&quot;input/2565/&quot;"/>
-      <value value="&quot;input/2698/&quot;"/>
-      <value value="&quot;input/3888/&quot;"/>
-      <value value="&quot;input/4563/&quot;"/>
-      <value value="&quot;input/4698/&quot;"/>
-      <value value="&quot;input/4704/&quot;"/>
-      <value value="&quot;input/4822/&quot;"/>
-      <value value="&quot;input/5240/&quot;"/>
-      <value value="&quot;input/5264/&quot;"/>
-      <value value="&quot;input/5265/&quot;"/>
-      <value value="&quot;input/5368/&quot;"/>
-      <value value="&quot;input/5397/&quot;"/>
-      <value value="&quot;input/5498/&quot;"/>
-      <value value="&quot;input/5500/&quot;"/>
-      <value value="&quot;input/5520/&quot;"/>
-      <value value="&quot;input/5884/&quot;"/>
-      <value value="&quot;input/6037/&quot;"/>
-      <value value="&quot;input/6041/&quot;"/>
-      <value value="&quot;input/6170/&quot;"/>
-      <value value="&quot;input/6185/&quot;"/>
-      <value value="&quot;input/6187/&quot;"/>
-      <value value="&quot;input/6197/&quot;"/>
-      <value value="&quot;input/6309/&quot;"/>
-      <value value="&quot;input/6443/&quot;"/>
-      <value value="&quot;input/6575/&quot;"/>
-    </enumeratedValueSet>
-  </experiment>
-  <experiment name="UPS1" repetitions="10" runMetricsEveryStep="false">
-    <setup>setup</setup>
-    <go>go</go>
-    <metric>nhost1</metric>
-    <metric>nhost2</metric>
-    <metric>nhost3</metric>
-    <metric>prima1</metric>
-    <metric>prima2</metric>
-    <metric>prima3</metric>
-    <metric>count spruce</metric>
-    <metric>ncut1</metric>
-    <metric>ncut2</metric>
-    <metric>ncut3</metric>
-    <enumeratedValueSet variable="sanitation-felling">
-      <value value="0"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="path-to-input">
-      <value value="&quot;input/1614/&quot;"/>
-      <value value="&quot;input/1632/&quot;"/>
-      <value value="&quot;input/2565/&quot;"/>
-      <value value="&quot;input/2698/&quot;"/>
-      <value value="&quot;input/3888/&quot;"/>
-      <value value="&quot;input/4563/&quot;"/>
-      <value value="&quot;input/4698/&quot;"/>
-      <value value="&quot;input/4704/&quot;"/>
-      <value value="&quot;input/4822/&quot;"/>
-      <value value="&quot;input/5240/&quot;"/>
-      <value value="&quot;input/5264/&quot;"/>
-      <value value="&quot;input/5265/&quot;"/>
-      <value value="&quot;input/5368/&quot;"/>
-      <value value="&quot;input/5397/&quot;"/>
-      <value value="&quot;input/5498/&quot;"/>
-      <value value="&quot;input/5500/&quot;"/>
-      <value value="&quot;input/5520/&quot;"/>
-      <value value="&quot;input/5884/&quot;"/>
-      <value value="&quot;input/6037/&quot;"/>
-      <value value="&quot;input/6041/&quot;"/>
-      <value value="&quot;input/6170/&quot;"/>
-      <value value="&quot;input/6185/&quot;"/>
-      <value value="&quot;input/6187/&quot;"/>
-      <value value="&quot;input/6197/&quot;"/>
-      <value value="&quot;input/6309/&quot;"/>
-      <value value="&quot;input/6443/&quot;"/>
-      <value value="&quot;input/6575/&quot;"/>
-    </enumeratedValueSet>
-  </experiment>
-  <experiment name="UPS2" repetitions="10" runMetricsEveryStep="false">
-    <setup>setup</setup>
-    <go>go</go>
-    <metric>nhost1</metric>
-    <metric>nhost2</metric>
-    <metric>nhost3</metric>
-    <metric>prima1</metric>
-    <metric>prima2</metric>
-    <metric>prima3</metric>
-    <metric>count spruce</metric>
-    <metric>ncut1</metric>
-    <metric>ncut2</metric>
-    <metric>ncut3</metric>
-    <enumeratedValueSet variable="sanitation-felling">
-      <value value="25"/>
-      <value value="50"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="path-to-input">
-      <value value="&quot;input/1614/&quot;"/>
-      <value value="&quot;input/1632/&quot;"/>
-      <value value="&quot;input/2565/&quot;"/>
-      <value value="&quot;input/2698/&quot;"/>
-      <value value="&quot;input/3888/&quot;"/>
-      <value value="&quot;input/4563/&quot;"/>
-      <value value="&quot;input/4698/&quot;"/>
-      <value value="&quot;input/4704/&quot;"/>
-      <value value="&quot;input/4822/&quot;"/>
-      <value value="&quot;input/5240/&quot;"/>
-      <value value="&quot;input/5264/&quot;"/>
-      <value value="&quot;input/5265/&quot;"/>
-      <value value="&quot;input/5368/&quot;"/>
-      <value value="&quot;input/5397/&quot;"/>
-      <value value="&quot;input/5498/&quot;"/>
-      <value value="&quot;input/5500/&quot;"/>
-      <value value="&quot;input/5520/&quot;"/>
-      <value value="&quot;input/5884/&quot;"/>
-      <value value="&quot;input/6037/&quot;"/>
-      <value value="&quot;input/6041/&quot;"/>
-      <value value="&quot;input/6170/&quot;"/>
-      <value value="&quot;input/6185/&quot;"/>
-      <value value="&quot;input/6187/&quot;"/>
-      <value value="&quot;input/6197/&quot;"/>
-      <value value="&quot;input/6309/&quot;"/>
-      <value value="&quot;input/6443/&quot;"/>
-      <value value="&quot;input/6575/&quot;"/>
-    </enumeratedValueSet>
-  </experiment>
-  <experiment name="UPS3" repetitions="10" runMetricsEveryStep="false">
-    <setup>setup</setup>
-    <go>go</go>
-    <metric>nhost1</metric>
-    <metric>nhost2</metric>
-    <metric>nhost3</metric>
-    <metric>prima1</metric>
-    <metric>prima2</metric>
-    <metric>prima3</metric>
-    <metric>count spruce</metric>
-    <metric>ncut1</metric>
-    <metric>ncut2</metric>
-    <metric>ncut3</metric>
-    <enumeratedValueSet variable="sanitation-felling">
-      <value value="75"/>
-      <value value="100"/>
-    </enumeratedValueSet>
+    <steppedValueSet variable="sanitation-felling" first="0" step="10" last="100"/>
     <enumeratedValueSet variable="path-to-input">
       <value value="&quot;input/1614/&quot;"/>
       <value value="&quot;input/1632/&quot;"/>
